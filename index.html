@@ -203,7 +203,26 @@ section.block { margin-top: 76px; }
 .bp-toggle { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--muted);
   width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 12px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; }
-.bottom-player.collapsed .bp-center { display: none; }
+.bottom-player.collapsed .bp-center,
+.bottom-player.collapsed .bp-seekrow { display: none; }
+.bottom-player { flex-direction: column; align-items: stretch; border-radius: 22px; }
+.bp-row { display: flex; align-items: center; gap: 8px; }
+.bp-label { cursor: pointer; }
+.bp-label:hover { color: var(--ice-2); }
+#bpDisc { transition: transform .3s linear; }
+.bottom-player.playing #bpDisc { animation: bpspin 3.2s linear infinite; }
+@keyframes bpspin { to { transform: rotate(360deg); } }
+.bp-seekrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 0 2px; }
+.bp-time { font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; min-width: 26px; }
+.bp-seek { -webkit-appearance: none; flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.12); outline: none; cursor: pointer; }
+.bp-seek::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ice); box-shadow: 0 0 6px rgba(63,169,255,0.6); }
+.bp-seek::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--ice); border: none; }
+.bp-playlist { display: none; flex-direction: column; gap: 2px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.bp-playlist.open { display: flex; }
+.bp-plitem { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; cursor: pointer; font-size: 12px; color: var(--muted); }
+.bp-plitem:hover { background: rgba(63,169,255,0.06); color: var(--text); }
+.bp-plitem.active { color: var(--ice-2); background: rgba(63,169,255,0.1); }
+.bp-plitem .bp-plnum { width: 16px; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* PROFILE MODAL */
 .dev-trigger { color: var(--ice-2); font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
@@ -420,6 +439,39 @@ footer .made { opacity: .6; margin-top: 4px; }
   </footer>
 </div>
 
+<div class="bottom-player" id="bottomPlayer">
+  <div class="bp-row">
+    <div class="bp-brand" id="bpBrand">
+      <svg id="bpDisc" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 18V5l12-2v13" stroke="#3fa9ff" stroke-width="1.6"/>
+        <circle cx="6" cy="18" r="3" stroke="#3fa9ff" stroke-width="1.6"/>
+        <circle cx="18" cy="16" r="3" stroke="#3fa9ff" stroke-width="1.6"/>
+      </svg>
+      <span class="bp-dots">•••</span>
+    </div>
+    <div class="bp-center">
+      <span class="bp-label" id="bpLabel" title="اضغط لعرض القائمة">Music 1</span>
+      <button class="bp-btn" id="bpShuffle" title="عشوائي">⤨</button>
+      <button class="bp-btn" id="bpPrev" title="السابق">‹</button>
+      <button class="bp-btn bp-play" id="bpPlay" title="تشغيل">
+        <svg id="bpPlayIcon" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg>
+      </button>
+      <button class="bp-btn" id="bpNext" title="التالي">›</button>
+      <button class="bp-btn" id="bpRepeat" title="تكرار">⟲</button>
+      <span class="bp-vol-ic" id="bpVolIc">🔊</span>
+      <input type="range" class="bp-slider" id="bpVol" min="0" max="1" step="0.01" value="1">
+    </div>
+    <button class="bp-toggle" id="bpToggle" title="طي/فتح">⌃</button>
+  </div>
+  <div class="bp-seekrow" id="bpSeekRow">
+    <span class="bp-time" id="bpCur">0:00</span>
+    <input type="range" class="bp-seek" id="bpSeek" min="0" max="100" step="0.1" value="0">
+    <span class="bp-time" id="bpDur">0:00</span>
+  </div>
+  <div class="bp-playlist" id="bpPlaylist"></div>
+</div>
+<audio id="bpAudio" preload="metadata"></audio>
+
 <button class="to-top" id="toTop" title="لأعلى">↑</button>
 
 <div class="modal-overlay" id="profileModal">
@@ -555,6 +607,168 @@ shareBtn.addEventListener('click', () => {
     setTimeout(() => { shareBtn.textContent = '🔗'; shareBtn.classList.remove('copied'); }, 1500);
   });
 });
+
+/* Bottom music player */
+const bpTracks = [
+  { name: 'wadini',  src: 'wadini.mp3'  },
+  { name: 'free',    src: 'free.mp3'    },
+  { name: 'elmabda', src: 'elmabda.mp3' },
+  { name: 'afroto',  src: 'afroto.mp3'  },
+];
+let bpIndex = 0;
+let bpRepeatOne = false;
+let bpShuffleOn = false;
+let bpSeeking = false;
+
+const bpAudio    = document.getElementById('bpAudio');
+const bpLabel    = document.getElementById('bpLabel');
+const bpPlay     = document.getElementById('bpPlay');
+const bpPlayIcon = document.getElementById('bpPlayIcon');
+const bpPrev     = document.getElementById('bpPrev');
+const bpNext     = document.getElementById('bpNext');
+const bpRepeat   = document.getElementById('bpRepeat');
+const bpShuffle  = document.getElementById('bpShuffle');
+const bpVol      = document.getElementById('bpVol');
+const bpVolIc    = document.getElementById('bpVolIc');
+const bpToggle   = document.getElementById('bpToggle');
+const bpSeek     = document.getElementById('bpSeek');
+const bpCur      = document.getElementById('bpCur');
+const bpDur      = document.getElementById('bpDur');
+const bpPlaylist = document.getElementById('bpPlaylist');
+const bottomPlayer = document.getElementById('bottomPlayer');
+
+const iconPlay  = '<polygon points="6,4 20,12 6,20"/>';
+const iconPause = '<rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/>';
+
+function bpFmt(s) {
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
+function bpRenderPlaylist() {
+  bpPlaylist.innerHTML = bpTracks.map((t, i) =>
+    `<div class="bp-plitem${i === bpIndex ? ' active' : ''}" data-i="${i}">
+       <span class="bp-plnum">${i === bpIndex ? '♪' : i + 1}</span><span>${t.name}</span>
+     </div>`
+  ).join('');
+  bpPlaylist.querySelectorAll('.bp-plitem').forEach(el => {
+    el.addEventListener('click', () => bpLoad(parseInt(el.dataset.i, 10), true));
+  });
+}
+
+function bpLoad(i, autoplay) {
+  bpIndex = (i + bpTracks.length) % bpTracks.length;
+  const t = bpTracks[bpIndex];
+  bpAudio.src = t.src;
+  bpLabel.textContent = t.name;
+  bpSeek.value = 0;
+  bpCur.textContent = '0:00';
+  bpDur.textContent = '0:00';
+  bpRenderPlaylist();
+  if (autoplay) bpAudio.play().catch(() => {});
+}
+
+function bpNextIndex() {
+  if (bpShuffleOn && bpTracks.length > 1) {
+    let r;
+    do { r = Math.floor(Math.random() * bpTracks.length); } while (r === bpIndex);
+    return r;
+  }
+  return bpIndex + 1;
+}
+
+function bpSetPlayingUI(playing) {
+  bpPlayIcon.innerHTML = playing ? iconPause : iconPlay;
+  bpPlay.title = playing ? 'إيقاف' : 'تشغيل';
+  bottomPlayer.classList.toggle('playing', playing);
+}
+
+bpPlay.addEventListener('click', () => {
+  if (bpAudio.paused) {
+    if (!bpAudio.src) bpLoad(bpIndex, false);
+    bpAudio.play().catch(() => {});
+  } else {
+    bpAudio.pause();
+  }
+});
+
+bpAudio.addEventListener('play',  () => bpSetPlayingUI(true));
+bpAudio.addEventListener('pause', () => bpSetPlayingUI(false));
+
+bpAudio.addEventListener('loadedmetadata', () => {
+  bpDur.textContent = bpFmt(bpAudio.duration);
+  bpSeek.max = bpAudio.duration || 100;
+});
+
+bpAudio.addEventListener('timeupdate', () => {
+  if (bpSeeking) return;
+  bpCur.textContent = bpFmt(bpAudio.currentTime);
+  bpSeek.value = bpAudio.currentTime;
+});
+
+bpSeek.addEventListener('input', () => {
+  bpSeeking = true;
+  bpCur.textContent = bpFmt(parseFloat(bpSeek.value));
+});
+bpSeek.addEventListener('change', () => {
+  bpAudio.currentTime = parseFloat(bpSeek.value);
+  bpSeeking = false;
+});
+
+bpPrev.addEventListener('click', () => bpLoad(bpIndex - 1, true));
+bpNext.addEventListener('click', () => bpLoad(bpNextIndex(), true));
+
+bpRepeat.addEventListener('click', () => {
+  bpRepeatOne = !bpRepeatOne;
+  bpRepeat.classList.toggle('active', bpRepeatOne);
+  bpRepeat.title = bpRepeatOne ? 'تكرار الأغنية' : 'تكرار';
+});
+
+bpShuffle.addEventListener('click', () => {
+  bpShuffleOn = !bpShuffleOn;
+  bpShuffle.classList.toggle('active', bpShuffleOn);
+  bpShuffle.title = bpShuffleOn ? 'عشوائي مفعّل' : 'عشوائي';
+});
+
+bpAudio.addEventListener('ended', () => {
+  if (bpRepeatOne) {
+    bpAudio.currentTime = 0;
+    bpAudio.play().catch(() => {});
+  } else {
+    bpLoad(bpNextIndex(), true);
+  }
+});
+
+function bpApplyVolume(v) {
+  bpAudio.volume = v;
+  bpVol.value = v;
+  bpVolIc.textContent = v == 0 ? '🔇' : (v < 0.5 ? '🔉' : '🔊');
+  try { localStorage.setItem('bpVolume', v); } catch (e) {}
+}
+
+bpVol.addEventListener('input', () => {
+  bpAudio.muted = false;
+  bpApplyVolume(parseFloat(bpVol.value));
+});
+
+bpVolIc.addEventListener('click', () => {
+  bpAudio.muted = !bpAudio.muted;
+  bpVolIc.textContent = bpAudio.muted ? '🔇' : (bpAudio.volume < 0.5 ? '🔉' : '🔊');
+});
+
+bpToggle.addEventListener('click', () => {
+  bottomPlayer.classList.toggle('collapsed');
+  bpToggle.textContent = bottomPlayer.classList.contains('collapsed') ? '⌄' : '⌃';
+});
+
+bpLabel.addEventListener('click', () => bpPlaylist.classList.toggle('open'));
+
+/* restore saved volume, then initial load (paused — autoplay is blocked by browsers) */
+let bpSavedVol = 1;
+try { const v = parseFloat(localStorage.getItem('bpVolume')); if (!isNaN(v)) bpSavedVol = v; } catch (e) {}
+bpApplyVolume(bpSavedVol);
+bpLoad(0, false);
 
 /* Back to top */
 const toTop = document.getElementById('toTop');
